@@ -1,0 +1,9 @@
+## Interface: 50100
+## Version: 0.0.1
+## Author: SinaC
+## Title: |cFF148587Class|r Monitor cast bar plugin
+## Notes: Castbar plugin for ClassMonitor
+## RequiredDeps: ClassMonitor
+## OptionalDeps: ClassMonitor_ConfigUI
+
+castbar.lua
