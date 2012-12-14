@@ -116,6 +116,7 @@ function CastbarPlugin:Initialize()
 		{1, 1, 1, 1}, -- tick spark
 	}
 	self.settings.latency = DefaultBoolean(self.settings.latency, true)
+	self.settings.showticks = DefaultBoolean(self.settings.showticks, true)
 	--
 	self:UpdateGraphics()
 end
@@ -126,7 +127,7 @@ function CastbarPlugin:Enable()
 	self:RegisterUnitEvent("UNIT_SPELLCAST_FAILED", self.settings.unit, CastbarPlugin.SpellCastFailed)
 	self:RegisterUnitEvent("UNIT_SPELLCAST_INTERRUPTED", self.settings.unit, CastbarPlugin.SpellCastInterrupted)
 	self:RegisterUnitEvent("UNIT_SPELLCAST_STOP", self.settings.unit, CastbarPlugin.SpellCastInterruptible)
-	self:RegisterUnitEvent("UNIT_SPELLCAST_STOP", self.settings.unit, CastbarPlugin.SpellCastNotInterruptible)
+	self:RegisterUnitEvent("UNIT_SPELLCAST_STOP", self.settings.unit, CastbarPlugin.SpellCastnoInterrupt)
 	self:RegisterUnitEvent("UNIT_SPELLCAST_STOP", self.settings.unit, CastbarPlugin.SpellCastDelayed)
 	self:RegisterUnitEvent("UNIT_SPELLCAST_STOP", self.settings.unit, CastbarPlugin.SpellCastStop)
 	self:RegisterUnitEvent("UNIT_SPELLCAST_CHANNEL_START", self.settings.unit, CastbarPlugin.SpellCastChannelStart)
@@ -166,16 +167,17 @@ function CastbarPlugin:UpdateGraphics()
 	if not bar.status then
 		bar.status = CreateFrame("StatusBar", nil, bar)
 		bar.status:SetStatusBarTexture(UI.NormTex)
-		bar.status:SetFrameLevel(6)
-		bar.status:Point("TOPLEFT", bar, "TOPLEFT", 2, -2)
-		bar.status:Point("BOTTOMRIGHT", bar, "BOTTOMRIGHT", -2, 2)
+		--bar.status:SetFrameLevel(6)
+		--bar.status:Point("TOPLEFT", bar, "TOPLEFT", 2, -2)
+		--bar.status:Point("BOTTOMRIGHT", bar, "BOTTOMRIGHT", -2, 2)
+		bar.status:SetInside()
 	end
-	bar.status:SetStatusBarColor(unpack(self.settings.colors[0]))
+	bar.status:SetStatusBarColor(unpack(self.settings.colors[1]))
 	bar.status:SetMinMaxValues(0, 1)
 	--
 	if not bar.spellText then
 		bar.spellText = UI.SetFontString(bar.status, 12)
-		bar.spellText:Point("CENTER", bar.status)
+		bar.spellText:Point("LEFT", bar.status)
 	end
 	bar.spellText:SetText("")
 	--
@@ -186,7 +188,7 @@ function CastbarPlugin:UpdateGraphics()
 	bar.durationText:SetText("")
 	--
 	if self.settings.latency == true and not bar.latency then
-		bar.latency = castbar:CreateTexture(nil, "ARTWORK")
+		bar.latency = bar.status:CreateTexture(nil, "ARTWORK")
 		bar.latency:SetTexture(UI.NormTex)
 		bar.latency:SetVertexColor(unpack(self.settings.colors[2]))
 		bar.latency:Hide()
@@ -208,34 +210,39 @@ function CastbarPlugin:Update(elapsed)
 		local duration = self.duration + elapsed
 		if duration >= self.max then
 			self.casting = nil
-			self.bar:SetValue(0)
+			self.bar.status:SetValue(0)
 			self.bar:Hide()
 			self:UnregisterUpdate()
 		else
 			if self.delay ~= 0 then
-				self.bar.durationText:SetFormattedText("%.1f|cffff0000-%.1f|r", duration, self.delay)
+				--self.bar.durationText:SetFormattedText("%.1f|cffff0000-%.1f|r", duration, self.delay)
+				self.bar.durationText:SetFormattedText("%.1f |cffaf5050+ %.1f|r", self.max - duration, self.delay)
 			else
-				self.bar.durationText:SetFormattedText("%.1f", duration)
+				--self.bar.durationText:SetFormattedText("%.1f", duration)
+				self.bar.durationText:SetFormattedText("%.1f / %.1f", self.max - duration, self.max)
 			end
 			self.duration = duration
-			self.bar:SetValue(duration)
+			self.bar.status:SetValue(duration)
 		end
 	elseif self.channeling then
 		local duration = self.duration - elapsed
+--print("DURATION:"..tostring(duration))
 		if duration <= 0 then
 			self.channeling = nil
-			self.bar:SetValue(0)
+			self.bar.status:SetValue(0)
 			self:UpdateTicks(0)
 			self.bar:Hide()
 			self:UnregisterUpdate()
 		else
 			if self.delay ~= 0 then
-				self.bar.durationText:SetFormattedText("%.1f|cffff0000-%.1f|r", duration, self.delay)
+				--self.bar.durationText:SetFormattedText("%.1f|cffff0000-%.1f|r", duration, self.delay)
+				self.bar.durationText:SetFormattedText("%.1f |cffaf5050- %.1f|r", duration, self.delay)
 			else
-				self.bar.durationText:SetFormattedText("%.1f", duration)
+				--self.bar.durationText:SetFormattedText("%.1f", duration)
+				self.bar.durationText:SetFormattedText("%.1f / %.1f", duration, self.max)
 			end
 			self.duration = duration
-			self.bar:SetValue(duration)
+			self.bar.status:SetValue(duration)
 		end
 	else
 		self.casting = nil
@@ -243,7 +250,7 @@ function CastbarPlugin:Update(elapsed)
 		self.castID = nil
 
 		self:UpdateTicks(0)
-		self.bar:SetValue(0)
+		self.bar.status:SetValue(0)
 		self.bar:Hide()
 		self:UnregisterUpdate()
 	end
@@ -252,7 +259,7 @@ end
 function CastbarPlugin:UpdateLatency(horizontalAnchor)
 	if self.settings.latency ~= true then return end
 
-	local latency = self.latency
+	local latency = self.bar.latency
 	latency:ClearAllPoints()
 	latency:SetPoint(horizontalAnchor)
 	latency:SetPoint("TOP")
@@ -277,9 +284,9 @@ function CastbarPlugin:UpdateSpark(index, width, height, color)
 	self.bar.sparks = self.bar.sparks or {}
 	local spark = self.bar.sparks[index]
 	if not spark then
-		spark = self.bar:CreateTexture(nil, 'OVERLAY')
+		spark = self.bar.status:CreateTexture(nil, "OVERLAY")
 		spark:SetTexture("Interface\\CastingBar\\UI-CastingBar-Spark")
-		spark:SetBlendMode('ADD')
+		spark:SetBlendMode("ADD")
 	end
 	spark:SetVertexColor(unpack(color))
 	spark:SetWidth(width)
@@ -290,12 +297,15 @@ function CastbarPlugin:UpdateSpark(index, width, height, color)
 end
 
 function CastbarPlugin:UpdateTicks(tickCount)
-	if tickCount and tickCount > 0 then
+	if self.settings.showticks == true and tickCount and tickCount > 0 then
 		local delta = self.bar:GetWidth() / tickCount
-		for i = 1, tickCount do
-			local spark = UpdateSpark(i, 20, self.bar:GetHeight(), self.settings.colors[3])
+		-- don't display first and last tick
+		for i = 1, tickCount-1 do
+		--for i = 1, tickCount do
+			local spark = self:UpdateSpark(i, 10, self.bar:GetHeight(), self.settings.colors[4])
 			spark:ClearAllPoints()
-			spark:SetPoint("CENTER", self.bar, "LEFT", delta * (i-1), 0 )
+			spark:SetPoint("CENTER", self.bar, "LEFT", delta * i, 0 )
+			--spark:SetPoint("CENTER", self.bar, "LEFT", delta * (i-1), 0 )
 			spark:Show()
 		end
 		for i = tickCount+1, #self.bar.sparks do
@@ -308,29 +318,30 @@ function CastbarPlugin:UpdateTicks(tickCount)
 	end
 end
 
-function CastbarPlugin:SpellCastStart(_, unit, spell, _, lineID, spellID)
-	local name, _, text, _, startTime, endTime, _, castID, notInterruptible = UnitCastingInfo(self.settings.unit)
+function CastbarPlugin:SpellCastStart(_, unit, spell)
+	local name, _, text, _, startTime, endTime, _, castID, noInterrupt = UnitCastingInfo(self.settings.unit)
 	if not name then
 		self.bar:Hide()
 		return
 	end
+--print("SpellCastStop:"..tostring(unit).."  "..tostring(spell).."  "..tostring(castID))
 
 	self.casting = true
 	self.castID = castID
-	self.interrupt = notInterruptible
+	self.noInterrupt = noInterrupt
 	self.endTime = endTime / 1e3
 	self.startTime = startTime / 1e3
 	self.max = self.endTime - self.startTime
 	self.duration = GetTime() - self.startTime
 	self.delay = 0
 
-	self.bar.text:SetText(text)
+	self.bar.spellText:SetText(text)
 	self.bar.status:SetMinMaxValues(0, self.max)
 	self.bar.status:SetValue(0)
-	if notInterruptible then
-		self.bar.status:SetStatusBarColor(unpack(self.settings.colors[1]))
+	if noInterrupt then
+		self.bar.status:SetStatusBarColor(unpack(self.settings.colors[2]))
 	else
-		self.bar.status:SetStatusBarColor(unpack(self.settings.colors[0]))
+		self.bar.status:SetStatusBarColor(unpack(self.settings.colors[1]))
 	end
 	self:UpdateLatency("RIGHT")
 
@@ -338,21 +349,21 @@ function CastbarPlugin:SpellCastStart(_, unit, spell, _, lineID, spellID)
 	self:RegisterUpdate(CastbarPlugin.Update)
 end
 
-function CastbarPlugin:SpellCastFailed(_, unit, spell, _, lineID, castID)
+function CastbarPlugin:SpellCastFailed(_, unit, spell, _, castID)
 	if self.castID ~= castID then
 		return
 	end
 
 	self.casting = nil
-	self.interrupt = nil
+	self.noInterrupt = nil
 
-	self.bar.SetValue(0)
+	self.bar.status:SetValue(0)
 
 	self:UnregisterUpdate()
 	self.bar:Hide()
 end
 
-function CastbarPlugin:SpellCastInterrupted(_, unit, spell, _, lineID, castID)
+function CastbarPlugin:SpellCastInterrupted(_, unit, spell, _, castID)
 	if self.castID ~= castID then
 		return
 	end
@@ -360,49 +371,50 @@ function CastbarPlugin:SpellCastInterrupted(_, unit, spell, _, lineID, castID)
 	self.casting = nil
 	self.channeling = nil
 
-	self.bar.SetValue(0)
+	self.bar.status:SetValue(0)
 
 	self:UnregisterUpdate()
 	self.bar:Hide()
 end
 
 function CastbarPlugin:SpellCastInterruptible(_, unit)
-	self.bar.status:SetStatusBarColor(unpack(self.settings.colors[0]))
+	self.bar.status:SetStatusBarColor(unpack(self.settings.colors[1]))
 end
 
-function CastbarPlugin:SpellCastNotInterruptible(_, unit)
-	self.bar.status:SetStatusBarColor(unpack(self.settings.colors[1])
+function CastbarPlugin:SpellCastnoInterrupt(_, unit)
+	self.bar.status:SetStatusBarColor(unpack(self.settings.colors[2]))
 end
 
-function CastbarPlugin:SpellCastDelayed(_, unit, spellName, _, castID)
+function CastbarPlugin:SpellCastDelayed(_, unit, spell, _, castID)
 	local name, _, text, texture, startTime, endTime = UnitCastingInfo(unit)
 	if not startTime or not self.bar:IsShown() then return end
 
 	local duration = GetTime() - (startTime / 1e3)
-	if(duration < 0) then duration = 0 end
+	if duration < 0 then duration = 0 end
 
 	self.delay = self.delay + self.duration - duration
 	self.duration = duration
 
-	self.bar:SetValue(duration)
+	self.bar.status:SetValue(duration)
 end
 
-function CastbarPlugin:SpellCastStop(_, unit, spell, _, lineID, spellID)
+function CastbarPlugin:SpellCastStop(_, unit, spell, _, castID)
+--print("SpellCastStop:"..tostring(unit).."  "..tostring(spell).."  "..tostring(castID))
 	if self.castID ~= castID then
 		return
 	end
 
 	self.casting = nil
-	self.interrupt = nil
+	self.noInterrupt = nil
 
-	self.bar.SetValue(0)
+	self.bar.status:SetValue(0)
 
 	self:UnregisterUpdate()
 	self.bar:Hide()
 end
 
-function CastbarPlugin:SpellCastChannelStart(_, unit, spell, _, lineID, spellID)
-	local name, _, text, _, startTime, endTime, _, notInterruptible = UnitChannelInfo(self.settings.unit)
+function CastbarPlugin:SpellCastChannelStart(_, unit, spell)
+	local name, _, text, _, startTime, endTime, _, noInterrupt = UnitChannelInfo(self.settings.unit)
 	if not name then
 		self.bar:Hide()
 		return
@@ -411,20 +423,21 @@ function CastbarPlugin:SpellCastChannelStart(_, unit, spell, _, lineID, spellID)
 	self.channeling = true
 	self.casting = nil -- it's possible for spell casts to never have _STOP executed or be fully completed by the OnUpdate handler before CHANNEL_START is called
 	self.castID = nil -- 
-	self.interrupt = notInterruptible
+	self.noInterrupt = noInterrupt
 	self.endTime = endTime / 1e3
 	self.startTime = startTime / 1e3
 	self.max = self.endTime - self.startTime
-	self.duration = GetTime() - self.startTime
+	self.duration = self.endTime - GetTime()
 	self.delay = 0
 
-	self.bar.text:SetText(name..":"..text)
+	--self.bar.spellText:SetText(name..":"..text)
+	self.bar.spellText:SetText(name)
 	self.bar.status:SetMinMaxValues(0, self.max)
-	self.bar.status:SetValue(duration)
-	if notInterruptible then
-		self.bar.status:SetStatusBarColor(unpack(self.settings.colors[1]))
+	self.bar.status:SetValue(self.duration)
+	if noInterrupt then
+		self.bar.status:SetStatusBarColor(unpack(self.settings.colors[2]))
 	else
-		self.bar.status:SetStatusBarColor(unpack(self.settings.colors[0]))
+		self.bar.status:SetStatusBarColor(unpack(self.settings.colors[1]))
 	end
 	self:UpdateLatency("LEFT")
 	-- tick
@@ -435,7 +448,7 @@ function CastbarPlugin:SpellCastChannelStart(_, unit, spell, _, lineID, spellID)
 	self:RegisterUpdate(CastbarPlugin.Update)
 end
 
-function CastbarPlugin:SpellCastChannelUpdate(_, unit, spell, _, lineID, spellID)
+function CastbarPlugin:SpellCastChannelUpdate(_, unit, spell)
 	local name, _, text, _, startTime, endTime, oldStart = UnitChannelInfo(self.settings.unit)
 	if not name or not self.bar:IsShown() then
 		return
@@ -447,52 +460,20 @@ function CastbarPlugin:SpellCastChannelUpdate(_, unit, spell, _, lineID, spellID
 	self.duration = duration
 	self.max = (endTime - startTime) / 1e3
 
-	self.bar:SetMinMaxValues(0, self.max)
-	self.bar:SetValue(self.duration)
+	self.bar.status:SetMinMaxValues(0, self.max)
+	self.bar.status:SetValue(self.duration)
 end
 
-function CastbarPlugin:SpellCastChannelStop(_, unit, spell, _, lineID, spellID)
+function CastbarPlugin:SpellCastChannelStop(_, unit, spell
+)
 	if not self.bar:IsShown() then return end
 
 	self.channeling = nil
-	self.interrupt = nil
+	self.noInterrupt = nil
 
-	self.bar:SetValue(self.max)
+	self.bar.status:SetValue(self.max)
 	self:UpdateTicks(0)
 
 	self:UnregisterUpdate()
 	self.bar:Hide()
-end
-
--- OPTION DEFINITION
-local ClassMonitor_ConfigUI = ClassMonitor_ConfigUI
-if ClassMonitor_ConfigUI then
---print("CREATE CastbarPlugin DEFINITION")
-	local Helpers = ClassMonitor_ConfigUI.Helpers
-
-	local colors = Helpers.CreateColorsDefinition("colors", 4, {"Color", "NoInterrupt", "Latency", "Tick"})
-	local options = {
-		[1] = Helpers.Description,
-		[2] = Helpers.Name,
-		[3] = Helpers.DisplayName,
-		[4] = Helpers.Kind,
-		[5] = Helpers.Enabled,
-		[6] = Helpers.WidthAndHeight,
-		[7] = Helpers.Unit,
-		[8] = {
-			key = "latency", -- use self.settings.latency to access this option
-			name = "Latency", -- TODO: locales
-			desc = "Show latency", -- TODO: locales
-			type = "toggle", -- Ace3 config type
-			get = Helpers.GetValue, -- simple get value
-			set = Helpers.SetValue, -- simple set value
-			disabled = Helpers.IsPluginDisabled, -- disabled if plugin is disabled
-		},
-		[9] = colors,
-		[10] = Helpers.Anchor,
-		[11] = Helpers.AutoGridAnchor,
-	}
-	local short = "Cast bar"
-	local long = "Display a cast bar"
-	ClassMonitor_ConfigUI:NewPluginDefinition(pluginName, options, short, long) -- add plugin definition in ClassMonitor_ConfigUI
 end
