@@ -1,5 +1,4 @@
 local ADDON_NAME, Engine = ...
-local ADDON_NAME, Engine = ...
 
 local ClassMonitor = ClassMonitor
 local UI = ClassMonitor.UI
@@ -9,38 +8,87 @@ local UI = ClassMonitor.UI
 -- interrupt shield
 -- latency
 --[[
-if C["unitframes"].cbicons == true then
-				castbar.button = CreateFrame("Frame", nil, castbar)
-				castbar.button:Size(26)
-				castbar.button:SetTemplate("Default")
-				castbar.button:CreateShadow("Default")
+local sparkfactory = {
+	__index = function(t,k)
+		local spark = castBar:CreateTexture(nil, 'OVERLAY')
+		t[k] = spark
+		spark:SetTexture("Interface\\CastingBar\\UI-CastingBar-Spark")
+		spark:SetVertexColor(unpack(Quartz3.db.profile.sparkcolor))
+		spark:SetBlendMode('ADD')
+		spark:SetWidth(20)
+		spark:SetHeight(db.h*2.2)
+		return spark
+	end
+}
+local barticks = setmetatable({}, sparkfactory)
 
-				castbar.icon = castbar.button:CreateTexture(nil, "ARTWORK")
-				castbar.icon:Point("TOPLEFT", castbar.button, 2, -2)
-				castbar.icon:Point("BOTTOMRIGHT", castbar.button, -2, 2)
-				castbar.icon:SetTexCoord(0.08, 0.92, 0.08, .92)
-			
-				if unit == "player" then
-					if C["unitframes"].charportrait == true then
-						castbar.button:SetPoint("LEFT", -82.5, 26.5)
-					else
-						castbar.button:SetPoint("LEFT", -46.5, 26.5)
-					end
-				elseif unit == "target" then
-					if C["unitframes"].charportrait == true then
-						castbar.button:SetPoint("RIGHT", 82.5, 26.5)
-					else
-						castbar.button:SetPoint("RIGHT", 46.5, 26.5)
-					end					
-				end
-			end
-			
-			-- cast bar latency on player
-			if unit == "player" and C["unitframes"].cblatency == true then
-				castbar.safezone = castbar:CreateTexture(nil, "ARTWORK")
-				castbar.safezone:SetTexture(normTex)
-				castbar.safezone:SetVertexColor(0.69, 0.31, 0.31, 0.75)
-				castbar.SafeZone = c
+local function setBarTicks(ticknum)
+	if( ticknum and ticknum > 0) then
+		local delta = ( db.w / ticknum )
+		for k = 1,ticknum do
+			local t = barticks[k]
+			t:ClearAllPoints()
+			t:SetPoint("CENTER", castBar, "LEFT", delta * (k-1), 0 )
+			t:Show()
+		end
+		for k = ticknum+1,#barticks do
+			barticks[k]:Hide()
+		end
+	else
+		barticks[1].Hide = nil
+		for i=1,#barticks do
+			barticks[i]:Hide()
+		end
+	end
+end
+
+
+
+
+local function getChannelingTicks(spell)
+	if not db.showticks then
+		return 0
+	end
+	
+	return channelingTicks[spell] or 0
+end
+
+
+function Player:UNIT_SPELLCAST_START(bar, unit)
+	if bar.channeling then
+		local spell = UnitChannelInfo(unit)
+		bar.channelingTicks = getChannelingTicks(spell)
+		setBarTicks(bar.channelingTicks)
+	else
+		setBarTicks(0)
+	end
+end
+
+function Player:UNIT_SPELLCAST_STOP(bar, unit)
+	setBarTicks(0)
+end
+
+function Player:UNIT_SPELLCAST_FAILED(bar, unit)
+	setBarTicks(0)
+end
+
+function Player:UNIT_SPELLCAST_INTERRUPTED(bar, unit)
+	setBarTicks(0)
+end
+
+function Player:UNIT_SPELLCAST_DELAYED(bar, unit)
+
+end
+
+
+
+
+
+
+Spark
+if(self.Spark) then
+	self.Spark:SetPoint("CENTER", self, "LEFT", (duration / self.max) * self:GetWidth(), 0)
+end
 --]]
 
 -- Plugin displaying a simple castbar
@@ -65,6 +113,7 @@ function CastbarPlugin:Initialize()
 		{0.31, 0.45, 0.63, 0.5}, -- normal
 		{1, 0, 0, 1}, -- no interrupt
 		{0.69, 0.31, 0.31, 0.75}, -- latency
+		{1, 1, 1, 1}, -- tick spark
 	}
 	self.settings.latency = DefaultBoolean(self.settings.latency, true)
 	--
@@ -159,6 +208,7 @@ function CastbarPlugin:Update(elapsed)
 		local duration = self.duration + elapsed
 		if duration >= self.max then
 			self.casting = nil
+			self.bar:SetValue(0)
 			self.bar:Hide()
 			self:UnregisterUpdate()
 		else
@@ -174,6 +224,8 @@ function CastbarPlugin:Update(elapsed)
 		local duration = self.duration - elapsed
 		if duration <= 0 then
 			self.channeling = nil
+			self.bar:SetValue(0)
+			self:UpdateTicks(0)
 			self.bar:Hide()
 			self:UnregisterUpdate()
 		else
@@ -190,6 +242,7 @@ function CastbarPlugin:Update(elapsed)
 		self.channeling = nil
 		self.castID = nil
 
+		self:UpdateTicks(0)
 		self.bar:SetValue(0)
 		self.bar:Hide()
 		self:UnregisterUpdate()
@@ -217,6 +270,41 @@ function CastbarPlugin:UpdateLatency(horizontalAnchor)
 		latency:Show()
 	else
 		latency:Hide()
+	end
+end
+
+function CastbarPlugin:UpdateSpark(index, width, height, color)
+	self.bar.sparks = self.bar.sparks or {}
+	local spark = self.bar.sparks[index]
+	if not spark then
+		spark = self.bar:CreateTexture(nil, 'OVERLAY')
+		spark:SetTexture("Interface\\CastingBar\\UI-CastingBar-Spark")
+		spark:SetBlendMode('ADD')
+	end
+	spark:SetVertexColor(unpack(color))
+	spark:SetWidth(width)
+	spark:SetHeight(height)
+
+	self.bar.sparks[index] = spark
+	return spark
+end
+
+function CastbarPlugin:UpdateTicks(tickCount)
+	if tickCount and tickCount > 0 then
+		local delta = self.bar:GetWidth() / tickCount
+		for i = 1, tickCount do
+			local spark = UpdateSpark(i, 20, self.bar:GetHeight(), self.settings.colors[3])
+			spark:ClearAllPoints()
+			spark:SetPoint("CENTER", self.bar, "LEFT", delta * (i-1), 0 )
+			spark:Show()
+		end
+		for i = tickCount+1, #self.bar.sparks do
+			self.bar.sparks[i]:Hide()
+		end
+	else
+		for i = 1, #self.bar.sparks do
+			self.bar.sparks[i]:Hide()
+		end
 	end
 end
 
@@ -339,6 +427,9 @@ function CastbarPlugin:SpellCastChannelStart(_, unit, spell, _, lineID, spellID)
 		self.bar.status:SetStatusBarColor(unpack(self.settings.colors[0]))
 	end
 	self:UpdateLatency("LEFT")
+	-- tick
+	local tickCount = Engine.GetChannelingTicks(name)
+	self:UpdateTicks(tickCount)
 
 	self.bar:Show()
 	self:RegisterUpdate(CastbarPlugin.Update)
@@ -367,6 +458,7 @@ function CastbarPlugin:SpellCastChannelStop(_, unit, spell, _, lineID, spellID)
 	self.interrupt = nil
 
 	self.bar:SetValue(self.max)
+	self:UpdateTicks(0)
 
 	self:UnregisterUpdate()
 	self.bar:Hide()
@@ -378,7 +470,7 @@ if ClassMonitor_ConfigUI then
 --print("CREATE CastbarPlugin DEFINITION")
 	local Helpers = ClassMonitor_ConfigUI.Helpers
 
-	local colors = Helpers.CreateColorsDefinition("colors", 3, {"Color", "NoInterrupt", "Latency"})
+	local colors = Helpers.CreateColorsDefinition("colors", 4, {"Color", "NoInterrupt", "Latency", "Tick"})
 	local options = {
 		[1] = Helpers.Description,
 		[2] = Helpers.Name,
