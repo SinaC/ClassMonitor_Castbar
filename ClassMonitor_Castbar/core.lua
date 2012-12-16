@@ -281,7 +281,6 @@ function CastbarPlugin:UpdateLatency(horizontalAnchor)
 end
 
 function CastbarPlugin:UpdateSpark(index, width, height, color)
-	self.bar.sparks = self.bar.sparks or {}
 	local spark = self.bar.sparks[index]
 	if not spark then
 		spark = self.bar.status:CreateTexture(nil, "OVERLAY")
@@ -298,6 +297,7 @@ end
 
 function CastbarPlugin:UpdateTicks(tickCount)
 	if self.settings.showticks == true and tickCount and tickCount > 0 then
+		self.bar.sparks = self.bar.sparks or {}
 		local delta = self.bar:GetWidth() / tickCount
 		-- don't display first and last tick
 		for i = 1, tickCount-1 do
@@ -312,8 +312,10 @@ function CastbarPlugin:UpdateTicks(tickCount)
 			self.bar.sparks[i]:Hide()
 		end
 	else
-		for i = 1, #self.bar.sparks do
-			self.bar.sparks[i]:Hide()
+		if self.bar.sparks then
+			for i = 1, #self.bar.sparks do
+				self.bar.sparks[i]:Hide()
+			end
 		end
 	end
 end

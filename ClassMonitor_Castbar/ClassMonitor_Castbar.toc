@@ -1,5 +1,5 @@
 ## Interface: 50100
-## Version: 0.3
+## Version: 0.4
 ## Author: SinaC
 ## Title: |cFF148587Class|r Monitor cast bar plugin
 ## Notes: Castbar plugin for ClassMonitor
